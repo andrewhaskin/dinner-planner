@@ -401,7 +401,7 @@ function typeahead(inSel,boxSel,src){
   box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.new)pickNew();else src.pick(src.get(b.dataset.id))});
 }
 
-function modeSwitch(){return`<div class="modes" role="group" aria-label="Planner">${[['breakfast','Breakfasts'],['dinner','Dinners'],['lunch','Kid lunches']].map(([v,l])=>`<button data-act="mode" data-v="${v}" aria-pressed="${ui.mode===v}">${l}</button>`).join('')}</div>`}
+function modeSwitch(){return`<div class="modes" role="group" aria-label="Planner">${[['breakfast','Breakfasts'],['lunch','Kid lunches'],['dinner','Dinners']].map(([v,l])=>`<button data-act="mode" data-v="${v}" aria-pressed="${ui.mode===v}">${l}</button>`).join('')}</div>`}
 function weekTitle(){
   const diff=Math.round((ui.week-mondayOf(new Date()))/6048e5);
   if(diff===0)return'This week';if(diff===1)return'Next week';if(diff===-1)return'Last week';
