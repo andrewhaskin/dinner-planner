@@ -76,7 +76,13 @@ textarea{resize:vertical;line-height:1.4}
 .weekhead small{display:block;color:var(--muted);font-size:14px;margin-top:2px}
 .weekhead .linkbtn{font-size:14px}
 
-.day{display:grid;grid-template-columns:58px 1fr;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--line);border-radius:16px;padding:14px 14px 14px 12px;margin-bottom:10px}
+.day{position:relative;display:flex;align-items:stretch;width:100%;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--line);border-radius:16px;margin-bottom:10px}
+.dayopen{flex:1;min-width:0;display:grid;grid-template-columns:58px 1fr;gap:12px;text-align:left;background:none;border:0;border-radius:16px;padding:14px 4px 14px 12px}
+.grip{flex:none;width:38px;display:flex;align-items:center;justify-content:center;color:var(--muted);opacity:.6;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.grip .hsvg{width:18px;height:18px}
+.day.shift{transition:transform .16s ease}
+.day.dragging{z-index:8;box-shadow:0 12px 28px rgba(10,20,15,.25);cursor:grabbing}
+.day.dragging .grip{opacity:1;color:var(--basil)}
 .day.today{border-left-color:var(--basil)}
 .day[data-status=leftovers]{border-left-color:var(--plum)}
 .day[data-status=out]{border-left-color:var(--tomato)}
@@ -197,6 +203,13 @@ body[data-screen="library"] .tabs,body[data-screen="setup"] .tabs,body[data-scre
 .starter.have{color:var(--muted)}
 .stickybar{position:sticky;bottom:0;background:var(--surface);padding:12px 0 2px;margin-top:8px}
 .btn:disabled{opacity:.5}
+.poolrow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:8px}
+.poolrow b{display:block;font-weight:700;font-size:16px}
+.poolrow small{display:block;color:var(--muted);font-size:13px}
+.poolrow i{font-style:normal;font-size:20px;color:var(--muted)}
+.poollist{padding:0 2px 6px}
+.poolall{display:flex;gap:18px;margin:10px 0 2px}
+.starter small .hsvg{width:14px;height:14px;color:var(--tomato)}
 .tgl{font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 4px}
 </style>
 </head>
@@ -292,13 +305,14 @@ const HEART_O='<svg class="hsvg" viewBox="0 0 24 24" aria-hidden="true"><path fi
 const BOOK='<svg class="hsvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M8 7h8"/></svg>';
 const GEAR='<svg class="hsvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 const BACK='<svg class="hsvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+const GRIP='<svg class="hsvg" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
 const SLIDERS='<svg class="hsvg" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
 
 function uidGen(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 const uniq=a=>[...new Set(a)];
 const str=v=>typeof v==='string'?v:(v==null?'':String(v));
-function fresh(){return{v:3,updatedAt:0,meals:{},tags:DEFAULT_TAGS.slice(),weeks:{},regulars:{},prefs:{require:['dinner'],exclude:[],season:true,noRepeat:true},presets:[],bfast:{weeks:{},regulars:{},prefs:{require:['breakfast'],exclude:[],season:false,noRepeat:true},presets:[]},kids:[],lunchPlans:{},lunchRegulars:{},lunchPrefs:{noRepeat:true,weekends:false,treats:'any',schoolLunch:false,snacks:false,sides:2,snackItems:1}}}
+function fresh(){return{v:3,updatedAt:0,meals:{},tags:DEFAULT_TAGS.slice(),weeks:{},regulars:{},prefs:{require:['dinner'],exclude:[],season:true,noRepeat:true},presets:[],bfast:{weeks:{},regulars:{},prefs:{require:['breakfast'],exclude:[],season:false,noRepeat:true},presets:[]},kids:[],lunchPlans:{},lunchRegulars:{},magicPools:{},lunchPrefs:{noRepeat:true,weekends:true,treats:'any',schoolLunch:false,snacks:false,sides:2,snackItems:1}}}
 function blankDay(){return{status:'cook',main:null,sides:[],note:''}}
 function blankLDay(){return{status:'pack',lunch:{main:null,sides:[]},snack:{items:[]},note:''}}
 function normItem(m,id){m.id=id;m.name=str(m.name);m.tags=uniq((Array.isArray(m.tags)?m.tags:[]).filter(t=>typeof t==='string'&&t.trim()).map(t=>t.trim().toLowerCase()));m.time=str(m.time);m.link=str(m.link);m.ingredients=str(m.ingredients);m.notes=str(m.notes);return m}
@@ -307,6 +321,18 @@ function normPlan(pl,base,meals){
   const fixDays=days=>Array.from({length:7},(_,i)=>{const d=isObj(days?.[i])?days[i]:{};return{status:['cook','leftovers','out','order'].includes(d.status)?d.status:'cook',main:ok(d.main),sides:uniq((Array.isArray(d.sides)?d.sides:[]).map(ok).filter(Boolean)),note:str(d.note)}});
   const weeks={};for(const[k,w]of Object.entries(isObj(pl.weeks)?pl.weeks:{}))if(/^\d{4}-\d{2}-\d{2}$/.test(k))weeks[k]={days:fixDays(w?.days)};
   return{weeks,regulars:cleanRegs(pl.regulars,meals),prefs:Object.assign(base.prefs,isObj(pl.prefs)?pl.prefs:{}),presets:(Array.isArray(pl.presets)?pl.presets:[]).filter(isObj).map(p=>({id:str(p.id)||uidGen('p'),name:str(p.name)||'Saved week',days:fixDays(p.days)}))};
+}
+const MEALS3=['breakfast','lunch','dinner'];
+function defPool(m){return{groups:[m],off:[],opts:{mode:'all',days:[false,false,false,false,false,false,false],keep:true,what:'both',allKids:false}}}
+function cleanPools(src,meals){
+  const out={};
+  for(const m of MEALS3){
+    const p=isObj(src)&&isObj(src[m])?src[m]:{},d=defPool(m),o=isObj(p.opts)?p.opts:{};
+    out[m]={groups:Array.isArray(p.groups)?MEALS3.filter(g=>p.groups.includes(g)):d.groups,
+      off:uniq((Array.isArray(p.off)?p.off:[]).filter(id=>typeof id==='string'&&meals[id])),
+      opts:{mode:['all','nonregular','pick'].includes(o.mode)?o.mode:'all',days:Array.from({length:7},(_,i)=>!!(Array.isArray(o.days)&&o.days[i])),keep:o.keep!==false,what:['both','lunch','snack'].includes(o.what)?o.what:'both',allKids:!!o.allKids}};
+  }
+  return out;
 }
 function cleanRegs(r,meals){const out={};if(isObj(r))for(const[i,v]of Object.entries(r))if(/^[0-6]$/.test(i)&&typeof v==='string'&&v.startsWith('m:')&&meals[v.slice(2)])out[i]=v;return out}
 function migrate(o){
@@ -349,18 +375,20 @@ function migrate(o){
   const dn=normPlan(src,f,meals);s.weeks=dn.weeks;s.regulars=dn.regulars;s.prefs=dn.prefs;s.presets=dn.presets;
   s.bfast=normPlan(isObj(src.bfast)?src.bfast:{},f.bfast,meals);
   s.lunchRegulars=cleanRegs(src.lunchRegulars,meals);
+  s.magicPools=cleanPools(src.magicPools,meals);
   for(const p of[s.prefs,s.bfast.prefs]){p.require=(Array.isArray(p.require)?p.require:[]).filter(t=>typeof t==='string');p.exclude=(Array.isArray(p.exclude)?p.exclude:[]).filter(t=>typeof t==='string');p.season=!!p.season;p.noRepeat=!!p.noRepeat}
   const lp=Object.assign(fresh().lunchPrefs,isObj(src.lunchPrefs)?src.lunchPrefs:{});
   lp.sides=Math.max(0,Math.min(5,parseInt(lp.sides,10)||0));if(!isObj(src.lunchPrefs)||src.lunchPrefs.sides==null)lp.sides=2;
   lp.snackItems=Math.max(1,Math.min(4,parseInt(lp.snackItems,10)||1));
-  lp.treats=lp.treats==='any'?'any':Math.max(0,Math.min(7,parseInt(lp.treats,10)||0));
+  lp.treats='any';
   for(const b of['noRepeat','weekends','schoolLunch','snacks'])lp[b]=!!lp[b];
+  if((Number(src.v)||0)<4)lp.weekends=true;
   s.lunchPrefs=lp;
   const tagSrc=Array.isArray(src.tags)?src.tags:DEFAULT_TAGS;
   s.tags=uniq([...FIXED_TAGS,...tagSrc,...(Array.isArray(src.foodTags)?src.foodTags:[]),...Object.values(meals).flatMap(m=>m.tags)].filter(t=>typeof t==='string'&&t).map(t=>t.toLowerCase()));
   delete s.foods;delete s.combos;delete s.foodTags;delete s.lunchWeeks;
   s.updatedAt=Number(src.updatedAt)||0;
-  s.v=3;
+  s.v=4;
   return s;
 }
 let S;
@@ -368,8 +396,7 @@ try{S=migrate(JSON.parse(localStorage.getItem(LS)||'null'))}catch(e){S=migrate(n
 let savedMode='dinner',savedKid='';try{const m=localStorage.getItem(LSMODE);savedMode=['lunch','breakfast'].includes(m)?m:'dinner';savedKid=localStorage.getItem(LSKID)||''}catch(e){}
 
 const ui={mode:savedMode,kid:savedKid,tab:'week',week:mondayOf(new Date()),sheets:[],lib:{q:'',tags:[]},
-  magic:{mode:'all',days:[false,false,false,false,false,false,false],keep:true},
-  lmagic:{mode:'all',days:[false,false,false,false,false,false,false],keep:true,what:'both',allKids:false},flash:null};
+poolOpen:null,flash:null};
 let db=null,uid=null,dl=null,sync='local',pushTimer=null;
 
 const $=s=>document.querySelector(s);
@@ -397,6 +424,9 @@ const itemName=id=>S.meals[id]?.name||'';
 const named=()=>Object.values(S.meals).filter(m=>m.name);
 function mains(){return named().filter(m=>!isSide(m)).sort(byName)}
 const snacksOn=()=>!!S.lunchPrefs.snacks;
+const MG=()=>S.magicPools[planKey()].opts;
+const LMG=()=>S.magicPools.lunch.opts;
+function poolFoods(m){const pl=S.magicPools[m];return mains().filter(x=>pl.groups.some(g=>has(x,g))&&!pl.off.includes(x.id))}
 const regsOf=m=>m==='breakfast'?S.bfast.regulars:m==='lunch'?S.lunchRegulars:S.regulars;
 const regFood=(i,m=ui.mode)=>{const v=regsOf(m)[i];return typeof v==='string'&&v.startsWith('m:')&&S.meals[v.slice(2)]?v.slice(2):null};
 const MEAL_NOUN={breakfast:'breakfast',lunch:'lunch',dinner:'dinner'};
@@ -499,7 +529,7 @@ function weekHeader(){
 }
 function dayCard(i,status,body,act){
   const date=addDays(ui.week,i),flash=ui.flash&&ui.flash.includes(i);
-  return`<button class="day${key(date)===key(new Date())?' today':''}${flash?' pop':''}" style="${flash?'animation-delay:'+(ui.flash.indexOf(i)*70)+'ms':''}" data-status="${status}" data-act="${act}" data-i="${i}"><div><div class="dname">${DAYS[i]}</div><div class="ddate">${fmt(date)}</div></div><div>${body}</div></button>`;
+  return`<div class="day${key(date)===key(new Date())?' today':''}${flash?' pop':''}" style="${flash?'animation-delay:'+(ui.flash.indexOf(i)*70)+'ms':''}" data-status="${status}" data-i="${i}"><button class="dayopen" data-act="${act}" data-i="${i}"><div><div class="dname">${DAYS[i]}</div><div class="ddate">${fmt(date)}</div></div><div>${body}</div></button><span class="grip" data-grip="${i}" title="Drag to reorder">${GRIP}</span></div>`;
 }
 function regularLabel(i,m=ui.mode){const id=regFood(i,m);return id?'Usually '+S.meals[id].name:''}
 const chipList=ids=>ids.map(itemName).filter(Boolean).map(n=>`<span class="chip">${esc(n)}</span>`).join('');
@@ -509,7 +539,7 @@ function viewWeek(){
   for(let i=0;i<7;i++){
     const d=getDay(k,i),m=d.main&&S.meals[d.main];
     let body;
-    if(d.status!=='cook')body=`<div class="dstatus ${d.status}">${PL().status[d.status]||STATUS[d.status]}</div>`;
+    if(d.status!=='cook')body=`<div class="dstatus ${d.status}">${PL().status[d.status]||STATUS[d.status]}</div>${d.status==='leftovers'&&m?`<div class="dmeta">${esc(m.name)}</div>`:''}`;
     else if(m)body=`<div class="dmain">${esc(m.name)}</div>${m.time&&+m.time?`<div class="dmeta">${m.time} min</div>`:''}`;
     else body=`<div class="dempty">${esc(regularLabel(i)||'Nothing planned')}</div>`;
     if(d.status==='cook'&&d.sides.length)body+=`<div class="chips">${chipList(d.sides)}</div>`;
@@ -557,38 +587,29 @@ function viewLibrary(){
   <button class="linkbtn savelink" data-act="starter">Add starter foods</button><p class="hint">Adds family basics for every meal and skips anything you already have.</p>`;
 }
 
-function prefsSummary(){
-  const p=P().prefs,parts=[];
-  parts.push(p.require.length?'Picking '+PL().nouns+' tagged '+p.require.join(' and '):'Picking from all your mains');
-  if(p.exclude.length)parts.push('skipping '+p.exclude.join(' and '));
-  if(p.season)parts.push('matched to '+seasonOf(ui.week));
-  if(p.noRepeat)parts.push("avoiding last week's "+PL().nouns);
-  return parts.join(', ')+'. Favorites come up more often.';
-}
-function lunchSummary(){
-  const p=S.lunchPrefs;
-  let t=`Builds each lunch from a lunch main plus ${p.sides} side${p.sides===1?'':'s'}`;
-  if(snacksOn())t+=`, and a snack of ${p.snackItems} item${p.snackItems===1?'':'s'}`;
-  t+='. Favorites come up more often.';
-  if(p.treats!=='any')t+=+p.treats===0?' No treats.':` Treats on at most ${p.treats} day${+p.treats>1?'s':''}.`;
-  if(p.noRepeat)t+=" Skips last week's mains when it can.";
-  return t;
-}
+function poolText(m){const pl=S.magicPools[m],n=poolFoods(m).length;if(!pl.groups.length)return'No meal types turned on yet.';return`Picking from ${n} ${pl.groups.map(g=>MODE_NAME[g].toLowerCase()).join(' and ')} meal${n===1?'':'s'}.`}
+function prefsSummary(){return poolText(planKey())+(P().prefs.noRepeat?" Avoids last week's "+PL().nouns+'.':'')+' Favorites come up more often.'}
+function lunchSummary(){const p=S.lunchPrefs;return poolText('lunch')+` Each lunch gets ${p.sides} side${p.sides===1?'':'s'}`+(snacksOn()?` and a ${p.snackItems}-item snack.`:'.')+(p.noRepeat?" Avoids last week's mains.":'')}
 function syncText(){
   if(sync==='cloud')return'Your plans save to your Claude account and to this device. Download a backup now and then for extra safety.';
   if(sync==='full')return'Your library is too big for account storage, so it saves on this device only. Download a backup to keep a copy.';
   return'Your plans save on this device only. Download a backup to keep a copy.';
 }
-function mealPrefs(){
-  const p=P().prefs;
-  return`<label class="lbl">Only pick ${PL().nouns} with these tags</label><div class="tagrow wrap">${S.tags.map(t=>`<button class="tag" data-act="preq" data-t="${esc(t)}" aria-pressed="${p.require.includes(t)}">${esc(tagLabel(t))}</button>`).join('')}</div>
-  <label class="lbl">Never pick ${PL().nouns} with these tags</label><div class="tagrow wrap">${S.tags.filter(t=>t!=='favorite').map(t=>`<button class="tag no" data-act="pexc" data-t="${esc(t)}" aria-pressed="${p.exclude.includes(t)}">${esc(t)}</button>`).join('')}</div>
-  <label class="switch"><input type="checkbox" id="pseason" ${p.season?'checked':''}> Match the season (${seasonOf(new Date())} right now)</label>
-  <label class="switch"><input type="checkbox" id="prepeat" ${p.noRepeat?'checked':''}> Avoid repeating last week's ${PL().nouns}</label>`;
+function poolEditor(m){
+  const pl=S.magicPools[m];
+  let h=`<label class="lbl">Pick from</label><div class="tagrow wrap">${MEALS3.map(g=>`<button class="tag" data-act="pgrp" data-m="${m}" data-g="${g}" aria-pressed="${pl.groups.includes(g)}">${MODE_NAME[g]}</button>`).join('')}</div>`;
+  if(!pl.groups.length)return h+`<p class="hint">Turn on at least one meal type.</p>`;
+  for(const g of pl.groups){
+    const list=mains().filter(x=>has(x,g)),on=list.filter(x=>!pl.off.includes(x.id)).length,k=m+':'+g,open=ui.poolOpen===k;
+    h+=`<button class="poolrow" data-act="popen" data-k="${k}" aria-expanded="${open}"><span><b>${MODE_NAME[g]} meals</b><small>${list.length?on+' of '+list.length+' on':'None in the library yet'}</small></span><i>${open?'⌃':'›'}</i></button>`;
+    if(open&&list.length)h+=`<div class="poollist"><div class="poolall"><button class="linkbtn" data-act="pall" data-m="${m}" data-g="${g}" data-on="1">All on</button><button class="linkbtn" data-act="pall" data-m="${m}" data-g="${g}" data-on="0">All off</button></div>${list.map(x=>`<label class="starter"><input type="checkbox" data-pool="${x.id}" data-m="${m}" ${pl.off.includes(x.id)?'':'checked'}><span>${esc(x.name)}</span>${isFav(x)?`<small aria-label="Favorite">${HEART}</small>`:''}</label>`).join('')}</div>`;
+  }
+  return h;
 }
+function mealPrefs(){return`<label class="switch"><input type="checkbox" id="prepeat" ${P().prefs.noRepeat?'checked':''}> Avoid repeating last week's ${PL().nouns}</label>`}
 function dinnerSetup(){
   const L=PL();
-  return`<section><h2>Magic preferences</h2><p class="hint">Magic picks foods tagged ${L.tag} that aren't sides. Favorites come up more often.</p>${mealPrefs()}</section>
+  return`<section><h2>Magic preferences</h2><p class="hint">Choose which meals Magic can pick for ${L.noun}. Favorites come up more often.</p>${poolEditor(planKey())}${mealPrefs()}</section>
   <section><h2>Saved weeks</h2><p class="hint">Save a week of ${L.nouns} you liked and load it into any other week.</p>
   ${P().presets.map(pr=>`<div class="preset"><b>${esc(pr.name)}</b><button class="btn ghost" data-act="loadpreset" data-id="${pr.id}">Load</button><button class="btn ghost danger" data-act="delpreset" data-id="${pr.id}">Delete</button></div>`).join('')}
   <div class="inrow" style="margin-top:12px"><input id="presetname" placeholder="Name, like Busy soccer week"><button class="btn" data-act="savepreset">Save</button></div>
@@ -607,12 +628,11 @@ function lunchPrefs(){
   const p=S.lunchPrefs;
   return`<div class="setrow"><span>Sides with each lunch</span>${stepper('sides',p.sides,0,5)}</div>
   ${snacksOn()?`<div class="setrow"><span>Items in each snack</span>${stepper('snackItems',p.snackItems,1,4)}</div>`:''}
-  <label class="switch"><input type="checkbox" id="lprepeat" ${p.noRepeat?'checked':''}> Avoid repeating last week's lunches</label>
-  <label class="lbl" for="ltreats">Treats</label><select id="ltreats"><option value="any" ${p.treats==='any'?'selected':''}>Any day</option>${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${String(p.treats)===String(n)?'selected':''}>${n===0?'Never':'At most '+n+' day'+(n>1?'s':'')+' a week'}</option>`).join('')}</select>`;
+  <label class="switch"><input type="checkbox" id="lprepeat" ${p.noRepeat?'checked':''}> Avoid repeating last week's lunches</label>`;
 }
 function lunchSetup(){
   const p=S.lunchPrefs;
-  return`<section><h2>Magic preferences</h2><p class="hint">Magic builds each lunch from a food tagged lunch plus sides tagged lunch and side. Snacks come from foods tagged snack.</p>${lunchPrefs()}</section>
+  return`<section><h2>Magic preferences</h2><p class="hint">Choose which meals Magic can pick as the lunch main. Sides come from foods tagged side, and snacks from foods tagged snack.</p>${poolEditor('lunch')}${lunchPrefs()}</section>
   <section><h2>Lunch days</h2>
   <label class="switch"><input type="checkbox" id="lweekends" ${p.weekends?'checked':''}> Plan weekends too</label>
   <label class="switch"><input type="checkbox" id="lsnacks" ${p.snacks?'checked':''}> Plan a snack with each lunch</label>
@@ -654,6 +674,10 @@ function sheetDay(s){
     }else h+=`<div class="inrow"><input id="mainin" placeholder="Start typing" autocomplete="off" enterkeyhint="done"><button class="iconbtn" data-act="rollday" aria-label="Pick one for me">🎲</button></div><div id="mainta" class="ta" hidden></div>`;
     h+=`<label class="lbl" for="sidein">Sides and extras</label>${d.sides.length?`<div class="chips" style="margin:0 0 8px">${itemChips(d.sides,'rmside','sides')}</div>`:''}
     <input id="sidein" placeholder="Add a side" autocomplete="off" enterkeyhint="done"><div id="sideta" class="ta" hidden></div>`;
+  }else if(d.status==='leftovers'){
+    const m=d.main&&S.meals[d.main];
+    h+=`<label class="lbl" for="mainin">Leftovers from</label>`;
+    h+=m?`<div class="picked"><button class="pickname" data-act="openmeal" data-id="${m.id}">${esc(m.name)}</button><button class="iconbtn" data-act="rmmain" aria-label="Remove">✕</button></div>`:`<input id="mainin" placeholder="Optional, like Beef chili" autocomplete="off" enterkeyhint="done"><div id="mainta" class="ta" hidden></div>`;
   }
   h+=`<label class="lbl" for="daynote">Note for the day</label><textarea id="daynote" rows="2" placeholder="${PL().noteHint}">${esc(d.note)}</textarea>
   <div class="row"><button class="btn ghost" data-act="clearday">Clear day</button><button class="btn" data-act="close">Done</button></div>`;
@@ -675,11 +699,12 @@ function sheetMeal(s){
   <div class="row"><button class="btn ghost danger" data-act="delmeal">Delete food</button><button class="btn" data-act="close">Done</button></div>`;
 }
 function sheetMagic(s){
-  const mg=ui.magic;
+  const mg=MG();
   return`<div class="sheethead"><h2>Magic<span>Fills ${PL().nouns} for the week of ${fmt(ui.week)}</span></h2><button class="iconbtn" data-act="magicprefs" aria-pressed="${!!s.prefs}" aria-label="Magic settings">${SLIDERS}</button><button class="iconbtn" data-act="close" aria-label="Close">✕</button></div>
   <div class="seg" style="--n:3">${[['all','Every day'],['nonregular','Skip regular '+PL().whens],['pick','Pick days']].map(([v,l])=>`<button data-act="mgmode" data-v="${v}" aria-pressed="${mg.mode===v}">${l}</button>`).join('')}</div>
   ${mg.mode==='pick'?`<div class="tagrow wrap" style="margin-top:12px">${DAYS.map((d,i)=>`<button class="tag" data-act="mgday" data-i="${i}" aria-pressed="${mg.days[i]}">${d}</button>`).join('')}</div>`:''}
   <label class="switch"><input type="checkbox" id="mgkeep" ${mg.keep?'checked':''}> Keep days I've already planned</label>
+  ${poolEditor(planKey())}
   ${s.prefs?`<div class="prefs">${mealPrefs()}</div>`:`<p class="hint">${esc(prefsSummary())}</p>`}
   <button class="btn magic" data-act="runmagic">✨ Fill it in</button>
   ${P().presets.length?`<label class="lbl">Or load a saved week</label>${P().presets.map(p=>`<div class="preset"><b>${esc(p.name)}</b><button class="btn ghost" data-act="loadpreset" data-id="${p.id}">Load</button></div>`).join('')}`:''}`;
@@ -703,13 +728,14 @@ function sheetLDay(s){
   return h;
 }
 function sheetLMagic(s){
-  const mg=ui.lmagic;
+  const mg=LMG();
   return`<div class="sheethead"><h2>Magic<span>Fills lunches for the week of ${fmt(ui.week)}</span></h2><button class="iconbtn" data-act="magicprefs" aria-pressed="${!!s.prefs}" aria-label="Magic settings">${SLIDERS}</button><button class="iconbtn" data-act="close" aria-label="Close">✕</button></div>
   <div class="seg" style="--n:3">${[['all','Every day'],['nonregular','Skip regular days'],['pick','Pick days']].map(([v,l])=>`<button data-act="lmgmode" data-v="${v}" aria-pressed="${mg.mode===v}">${l}</button>`).join('')}</div>
   ${mg.mode==='pick'?`<div class="tagrow wrap" style="margin-top:12px">${lDays().map(i=>`<button class="tag" data-act="lmgday" data-i="${i}" aria-pressed="${mg.days[i]}">${DAYS[i]}</button>`).join('')}</div>`:''}
   ${snacksOn()?`<div class="seg" style="--n:3;margin-top:10px">${[['both','Lunch and snack'],['lunch','Lunch only'],['snack','Snack only']].map(([v,l])=>`<button data-act="lmgwhat" data-v="${v}" aria-pressed="${mg.what===v}">${l}</button>`).join('')}</div>`:''}
   ${S.kids.length>1?`<label class="switch"><input type="checkbox" id="lmgall" ${mg.allKids?'checked':''}> Fill for all kids, not just ${esc(curKid().name)}</label>`:''}
   <label class="switch"><input type="checkbox" id="lmgkeep" ${mg.keep?'checked':''}> Keep what I've already packed</label>
+  ${poolEditor('lunch')}
   ${s.prefs?`<div class="prefs">${lunchPrefs()}</div>`:`<p class="hint">${esc(lunchSummary())}</p>`}
   <button class="btn magic" data-act="runlmagic">✨ Fill it in</button>`;
 }
@@ -755,7 +781,7 @@ function renderSheet(){
   root.innerHTML=`<div class="scrim" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true" data-sig="${sig}" style="${same?'animation:none':''}">${SHEETS[s.type](s)}</div>`;
   root.querySelector('.sheet').scrollTop=st;
   if(s.type==='day'){
-    typeahead('#mainin','#mainta',SRC.planMain(m=>{if(!m)return;setDay(s.k,s.i,d=>{d.main=m.id;d.sides=d.sides.filter(x=>x!==m.id);d.status='cook'});renderSheet();render()}));
+    typeahead('#mainin','#mainta',SRC.planMain(m=>{if(!m)return;setDay(s.k,s.i,d=>{d.main=m.id;d.sides=d.sides.filter(x=>x!==m.id)});renderSheet();render()}));
     typeahead('#sidein','#sideta',SRC.planSide(m=>{if(!m)return;setDay(s.k,s.i,d=>{if(!d.sides.includes(m.id)&&d.main!==m.id)d.sides.push(m.id)});renderSheet();render();$('#sidein')?.focus()}));
     $('#daynote').addEventListener('input',e=>setDay(s.k,s.i,d=>{d.note=e.target.value}));
   }
@@ -794,19 +820,17 @@ function refresh(){render();if(ui.sheets.length)renderSheet()}
 
 function chooseMeal(k,i,used){
   const rf=regFood(i);if(rf)return rf;
-  const p=P().prefs,season=seasonOf(addDays(parseKey(k),i));
-  const prevK=key(addDays(parseKey(k),-7)),prev=new Set((P().weeks[prevK]?.days||[]).map(d=>d.main).filter(Boolean));
-  let base=mains().filter(m=>p.require.every(t=>has(m,t)));
-  base=base.filter(m=>!p.exclude.some(t=>has(m,t)));
+  const p=P().prefs,base=poolFoods(planKey());
   if(!base.length)return null;
-  const seasonOk=m=>!p.season||!m.tags.some(t=>SEASONS.includes(t))||has(m,season);
-  const tiers=[m=>!used.has(m.id)&&(!p.noRepeat||!prev.has(m.id))&&seasonOk(m),m=>!used.has(m.id)&&seasonOk(m),m=>!used.has(m.id),()=>true];
+  const prevK=key(addDays(parseKey(k),-7)),prev=new Set((P().weeks[prevK]?.days||[]).map(d=>d.main).filter(Boolean));
+  const regs=new Set([0,1,2,3,4,5,6].filter(j=>j!==i).map(j=>regFood(j)).filter(Boolean)),fr=m=>!used.has(m.id)&&!regs.has(m.id);
+  const tiers=[m=>fr(m)&&(!p.noRepeat||!prev.has(m.id)),fr,m=>!used.has(m.id),()=>true];
   for(const f of tiers){const c=base.filter(f);if(c.length)return weightedPick(c,favW).id}
   return null;
 }
 function runMagic(){
-  if(!mains().length){toast('Add a few foods to your library first');return}
-  const k=key(ui.week),mg=ui.magic;
+  if(!poolFoods(planKey()).length&&!Object.keys(P().regulars).length){toast('Turn on some meals for Magic to pick from');return}
+  const k=key(ui.week),mg=MG();
   const targets=[0,1,2,3,4,5,6].filter(i=>mg.mode==='all'||(mg.mode==='nonregular'&&!regFood(i))||(mg.mode==='pick'&&mg.days[i]));
   if(!targets.length){toast('Pick at least one day');return}
   const used=new Set();
@@ -849,11 +873,11 @@ function buildLunch(ctx,ok,i,useReg=true){
   const all=named();
   const rf=useReg&&i!=null?regFood(i,'lunch'):null;
   if(rf){let pool=all.filter(m=>isSide(m)&&has(m,'lunch')&&m.id!==rf);if(!pool.length)pool=all.filter(m=>m.id!==rf&&['fruit','vegetable'].some(g=>has(m,g)));return{main:rf,sides:pickN(pool,S.lunchPrefs.sides,ok,['fruit','vegetable'])}}
-  let ms=all.filter(m=>has(m,'lunch')&&!isSide(m)&&notTreat(m));
-  if(!ms.length)ms=all.filter(m=>has(m,'protein')&&!isSide(m)&&notTreat(m));
+  const ms=poolFoods('lunch');
   if(!ms.length)return null;
   let main=null;
-  for(const f of[m=>!ctx.used.has(m.id)&&(!S.lunchPrefs.noRepeat||!ctx.prev.has(m.id)),m=>!ctx.used.has(m.id),()=>true]){const c=ms.filter(f);if(c.length){main=weightedPick(c,favW);break}}
+  const regs=new Set([0,1,2,3,4,5,6].filter(j=>j!==i).map(j=>regFood(j,'lunch')).filter(Boolean)),fr=m=>!ctx.used.has(m.id)&&!regs.has(m.id);
+  for(const f of[m=>fr(m)&&(!S.lunchPrefs.noRepeat||!ctx.prev.has(m.id)),fr,m=>!ctx.used.has(m.id),()=>true]){const c=ms.filter(f);if(c.length){main=weightedPick(c,favW);break}}
   let pool=all.filter(m=>isSide(m)&&has(m,'lunch')&&m.id!==main.id);
   if(!pool.length)pool=all.filter(m=>m.id!==main.id&&['fruit','vegetable'].some(g=>has(m,g)));
   return{main:main.id,sides:pickN(pool,S.lunchPrefs.sides,ok,['fruit','vegetable'])};
@@ -867,7 +891,7 @@ function buildSnack(ok){
 }
 function runLunchMagic(){
   if(!named().length){toast('Add some foods to your library first');return}
-  const k=key(ui.week),mg=ui.lmagic,doL=!snacksOn()||mg.what!=='snack',doS=snacksOn()&&mg.what!=='lunch';
+  const k=key(ui.week),mg=LMG(),doL=!snacksOn()||mg.what!=='snack',doS=snacksOn()&&mg.what!=='lunch';
   const targets=lDays().filter(i=>mg.mode==='all'||(mg.mode==='nonregular'&&!regFood(i,'lunch'))||(mg.mode==='pick'&&mg.days[i]));
   if(!targets.length){toast('Pick at least one day');return}
   const kids=mg.allKids&&S.kids.length>1?S.kids.map(x=>x.id):[ui.kid];
@@ -940,7 +964,7 @@ const acts={
   magicprefs(){const s=topSheet();s.prefs=!s.prefs;renderSheet()},
 
   openday(el){ui.sheets=[{type:'day',k:key(ui.week),i:+el.dataset.i}];renderSheet()},
-  status(el){const s=topSheet();setDay(s.k,s.i,d=>{d.status=el.dataset.v});renderSheet();render()},
+  status(el){const s=topSheet(),v=el.dataset.v;setDay(s.k,s.i,d=>{if(v==='leftovers'&&d.status!=='leftovers'){d.main=null;d.sides=[]}d.status=v});renderSheet();render()},
   rmmain(){const s=topSheet();setDay(s.k,s.i,d=>{d.main=null});renderSheet();render();$('#mainin')?.focus()},
   rmside(el){const s=topSheet();setDay(s.k,s.i,d=>{d.sides.splice(+el.dataset.j,1)});renderSheet();render()},
   rollday(){
@@ -962,8 +986,11 @@ const acts={
   mreg(el){const m=S.meals[topSheet().id],regs=regsOf(el.dataset.m),i=el.dataset.i;if(regs[i]==='m:'+m.id)delete regs[i];else regs[i]='m:'+m.id;save();renderSheet();render()},
   libtag(el){toggle(ui.lib.tags,el.dataset.t);render()},
   magic(){ui.sheets=[{type:'magic'}];renderSheet()},
-  mgmode(el){ui.magic.mode=el.dataset.v;renderSheet()},
-  mgday(el){ui.magic.days[+el.dataset.i]=!ui.magic.days[+el.dataset.i];renderSheet()},
+  mgmode(el){MG().mode=el.dataset.v;save();renderSheet()},
+  mgday(el){MG().days[+el.dataset.i]=!MG().days[+el.dataset.i];save();renderSheet()},
+  pgrp(el){const pl=S.magicPools[el.dataset.m];const g=pl.groups.includes(el.dataset.g)?pl.groups.filter(x=>x!==el.dataset.g):[...pl.groups,el.dataset.g];pl.groups=MEALS3.filter(x=>g.includes(x));save();refresh()},
+  popen(el){ui.poolOpen=ui.poolOpen===el.dataset.k?null:el.dataset.k;refresh()},
+  pall(el){const pl=S.magicPools[el.dataset.m],ids=mains().filter(x=>has(x,el.dataset.g)).map(x=>x.id);pl.off=el.dataset.on==='1'?pl.off.filter(id=>!ids.includes(id)):uniq([...pl.off,...ids]);save();refresh()},
   runmagic(){runMagic()},
   preq(el){toggle(P().prefs.require,el.dataset.t);save();refresh()},
   pexc(el){toggle(P().prefs.exclude,el.dataset.t);save();refresh()},
@@ -993,9 +1020,9 @@ const acts={
   },
   clearlday(){const s=topSheet();setLDay(s.k,s.i,d=>Object.assign(d,blankLDay()));renderSheet();render()},
   lmagic(){ui.sheets=[{type:'lmagic'}];renderSheet()},
-  lmgmode(el){ui.lmagic.mode=el.dataset.v;renderSheet()},
-  lmgday(el){ui.lmagic.days[+el.dataset.i]=!ui.lmagic.days[+el.dataset.i];renderSheet()},
-  lmgwhat(el){ui.lmagic.what=el.dataset.v;renderSheet()},
+  lmgmode(el){LMG().mode=el.dataset.v;save();renderSheet()},
+  lmgday(el){LMG().days[+el.dataset.i]=!LMG().days[+el.dataset.i];save();renderSheet()},
+  lmgwhat(el){LMG().what=el.dataset.v;save();renderSheet()},
   runlmagic(){runLunchMagic()},
   step(el){const k=el.dataset.k,lim=k==='sides'?[0,5]:[1,4];S.lunchPrefs[k]=Math.max(lim[0],Math.min(lim[1],S.lunchPrefs[k]+ +el.dataset.d));save();refresh()},
 
@@ -1037,11 +1064,54 @@ document.addEventListener('change',e=>{
   const set={pseason:v=>P().prefs.season=v,prepeat:v=>P().prefs.noRepeat=v,lprepeat:v=>S.lunchPrefs.noRepeat=v,lweekends:v=>S.lunchPrefs.weekends=v,lschool:v=>S.lunchPrefs.schoolLunch=v,lsnacks:v=>S.lunchPrefs.snacks=v};
   if(set[t.id]){set[t.id](t.checked);save();refresh();return}
   if(t.id==='ltreats'){S.lunchPrefs.treats=t.value==='any'?'any':+t.value;save();refresh();return}
-  if(t.id==='mgkeep'){ui.magic.keep=t.checked;return}
-  if(t.id==='lmgkeep'){ui.lmagic.keep=t.checked;return}
-  if(t.id==='lmgall'){ui.lmagic.allKids=t.checked;return}
+  if(t.id==='mgkeep'){MG().keep=t.checked;save();return}
+  if(t.id==='lmgkeep'){LMG().keep=t.checked;save();return}
+  if(t.id==='lmgall'){LMG().allKids=t.checked;save();return}
+  if(t.dataset&&t.dataset.pool){const pl=S.magicPools[t.dataset.m];toggle(pl.off,t.dataset.pool);save();refresh();return}
   if(t.id==='impfile'&&t.files&&t.files[0]){t.files[0].text().then(restore);t.value=''}
 });
+function reorderDays(from,to){
+  const k=key(ui.week),cl=o=>JSON.parse(JSON.stringify(o));
+  if(ui.mode==='lunch'){
+    const idx=lDays(),c=idx.map(i=>{const d=getLDay(k,i);return cl({status:d.status,lunch:d.lunch,snack:d.snack})});
+    c.splice(to,0,c.splice(from,1)[0]);idx.forEach((i,j)=>setLDay(k,i,d=>Object.assign(d,c[j])));ui.flash=[idx[to]];
+  }else{
+    const c=[0,1,2,3,4,5,6].map(i=>{const d=getDay(k,i);return cl({status:d.status,main:d.main,sides:d.sides})});
+    c.splice(to,0,c.splice(from,1)[0]);c.forEach((x,i)=>setDay(k,i,d=>Object.assign(d,x)));ui.flash=[to];
+  }
+  render();
+}
+let drag=null;
+document.addEventListener('pointerdown',e=>{
+  const g=e.target.closest('[data-grip]');if(!g||ui.tab!=='week'||ui.sheets.length)return;
+  e.preventDefault();
+  const card=g.closest('.day'),cards=[...document.querySelectorAll('#app .day')],from=cards.indexOf(card);
+  const rects=cards.map(c=>c.getBoundingClientRect());
+  drag={card,cards,from,to:from,rects,id:e.pointerId,y0:e.clientY,s0:window.scrollY,lastY:e.clientY};
+  card.classList.add('dragging');cards.forEach(c=>{if(c!==card)c.classList.add('shift')});
+  try{g.setPointerCapture(e.pointerId)}catch(_){}
+  const tick=()=>{if(!drag)return;const y=drag.lastY;if(y<90)window.scrollBy(0,-10);else if(y>window.innerHeight-150)window.scrollBy(0,10);moveDrag();drag.raf=requestAnimationFrame(tick)};
+  drag.raf=requestAnimationFrame(tick);
+});
+function moveDrag(){
+  const d=drag,dy=d.lastY-d.y0+(window.scrollY-d.s0),r=d.rects[d.from],gap=10,hgt=r.height+gap;
+  d.card.style.transform=`translateY(${dy}px) scale(1.02)`;
+  const mid=r.top+r.height/2+dy;
+  let to=d.from;
+  d.rects.forEach((q,j)=>{const c=q.top+q.height/2;if(j<d.from&&mid<c)to=Math.min(to,j);if(j>d.from&&mid>c)to=Math.max(to,j)});
+  d.to=to;
+  d.cards.forEach((c,j)=>{if(j===d.from)return;let t=0;if(d.from<to&&j>d.from&&j<=to)t=-hgt;else if(to<d.from&&j>=to&&j<d.from)t=hgt;c.style.transform=t?`translateY(${t}px)`:''});
+}
+document.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();drag.lastY=e.clientY;moveDrag()},{passive:false});
+function endDrag(e){
+  if(!drag||(e&&e.pointerId!==drag.id))return;
+  cancelAnimationFrame(drag.raf);
+  const{from,to,cards}=drag;drag=null;
+  cards.forEach(c=>{c.style.transform='';c.classList.remove('shift','dragging')});
+  if(to!==from)reorderDays(from,to);
+}
+document.addEventListener('pointerup',endDrag);
+document.addEventListener('pointercancel',endDrag);
 const ENTER={newtag:'addtagmeal',setuptag:'addtag',presetname:'savepreset'};
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&ui.sheets.length){closeSheet();return}
