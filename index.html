@@ -446,7 +446,7 @@ const lDays=()=>S.lunchPrefs.weekends?[0,1,2,3,4,5,6]:[0,1,2,3,4];
 const hasTreat=ids=>ids.some(id=>id&&S.meals[id]&&!notTreat(S.meals[id]));
 const dayFoods=d=>[d.lunch.main,...d.lunch.sides,...d.snack.items].filter(id=>id&&S.meals[id]);
 
-function save(){S.updatedAt=Date.now();try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}if(db&&uid){clearTimeout(pushTimer);pushTimer=setTimeout(push,700)}}
+function save(){S.updatedAt=Date.now();try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}if(db&&uid){clearTimeout(pushTimer);pushTimer=setTimeout(push,700)}pushRemote()}
 async function push(){try{await db.doc('data/users/'+uid+'/planner').set({json:JSON.stringify(S),updatedAt:S.updatedAt});sync='cloud'}catch(e){sync=e&&e.code==='quota_exceeded'?'full':'local'}}
 async function pull(){
   if(!db||!uid)return;
@@ -654,6 +654,7 @@ function viewSetup(){
   return topBar()+`<h1 class="title">Setup</h1><div class="modes" role="group" aria-label="Meal">${['breakfast','lunch','dinner'].map(v=>`<button data-act="mode" data-v="${v}" aria-pressed="${ui.mode===v}">${MODE_NAME[v]}</button>`).join('')}</div>
   <button class="navrow" data-tab="regulars"><span><b>Regular days</b><small>${regCount?regCount+' set across breakfast, lunch, and dinner':'Foods that repeat on the same day each week'}</small></span><i>›</i></button>
   ${L?lunchSetup():dinnerSetup()}${tagsSection()}${L?kidsSection():''}
+  <section><h2>Household sync</h2><div id="syncbox">${syncBox()}</div></section>
   <section><h2>Backup</h2><p class="hint">${syncText()} The backup covers every meal.</p>
   <div class="stack"><button class="btn" data-act="export">Download backup</button><button class="btn ghost" data-act="copybk">Copy backup text</button><label class="btn ghost file">Restore from file<input type="file" id="impfile" accept=".json,application/json"></label></div>
   <textarea id="pastebk" rows="3" placeholder="Or paste backup text here"></textarea>
@@ -769,9 +770,91 @@ function sheetStarters(s){
 }
 function sheetAsk(s){return`<div class="sheethead"><h2>${esc(s.title)}</h2></div><p>${esc(s.body)}</p><div class="row"><button class="btn ghost" data-act="close">Cancel</button><button class="btn" data-act="askok">${esc(s.ok)}</button></div>`}
 function ask(title,body,ok,fn){ui.sheets.push({type:'ask',title,body,ok,fn});renderSheet()}
-const SHEETS={day:sheetDay,meal:sheetMeal,magic:sheetMagic,lday:sheetLDay,lmagic:sheetLMagic,kid:sheetKid,copy:sheetCopy,starters:sheetStarters,ask:sheetAsk};
+const SHEETS={day:sheetDay,meal:sheetMeal,magic:sheetMagic,lday:sheetLDay,lmagic:sheetLMagic,kid:sheetKid,copy:sheetCopy,starters:sheetStarters,join:sheetJoin,ask:sheetAsk};
 const topSheet=()=>ui.sheets[ui.sheets.length-1];
 
+
+const LSSYNC='magic-meals-sync',FBV='10.12.2';
+const fb={state:'off',user:null,ref:null,unsub:null,pending:null,timer:null,msg:'',joined:false};
+const inClaude=()=>!!(window.claude&&window.claude.use);
+function syncCfg(){try{const c=JSON.parse(localStorage.getItem(LSSYNC)||'null');return c&&c.config&&c.config.apiKey?c:null}catch(e){return null}}
+const hhKey=()=>(syncCfg()?.household||'home');
+function parseConfig(text){
+  const m=String(text).match(/\{[\s\S]*\}/);if(!m)return null;
+  const t=m[0].replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,\s*}/g,'}');
+  try{const o=JSON.parse(t);return o.apiKey&&o.projectId&&o.authDomain?o:null}catch(e){return null}
+}
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('load'));document.head.appendChild(s)})}
+function authMsg(e){const c=e&&e.code||'';if(c==='auth/unauthorized-domain')return"This site isn't on Firebase's authorized domains list yet.";if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return'Sign-in was canceled.';if(c==='auth/network-request-failed')return'No connection. Try again.';return'Sign-in failed. '+(e&&e.message||'')}
+async function startSync(){
+  const c=syncCfg();if(!c||inClaude())return;
+  fb.state='loading';fb.msg='';refreshSync();
+  try{
+    if(!window.firebase||!firebase.firestore)for(const p of['app','auth','firestore'])await loadScript(`https://www.gstatic.com/firebasejs/${FBV}/firebase-${p}-compat.js`);
+    if(!firebase.apps.length)firebase.initializeApp(c.config);
+    firebase.auth().onAuthStateChanged(u=>{fb.user=u;if(u)connectDoc();else{stopDoc();fb.state='signedout';refreshSync()}});
+    firebase.auth().getRedirectResult().catch(e=>{fb.msg=authMsg(e);refreshSync()});
+  }catch(e){fb.state='error';fb.msg="Couldn't load sync. Check your connection and the config you pasted.";refreshSync()}
+}
+function stopDoc(){if(fb.unsub){fb.unsub();fb.unsub=null}fb.ref=null}
+function connectDoc(){
+  stopDoc();
+  fb.joined=localStorage.getItem('magic-meals-joined-'+hhKey())==='1';
+  fb.ref=firebase.firestore().collection('households').doc(hhKey());
+  fb.unsub=fb.ref.onSnapshot(snap=>{fb.state='on';fb.msg='';onRemote(snap);refreshSync()},err=>{fb.state=err.code==='permission-denied'?'denied':'error';fb.msg=err.code==='permission-denied'?"This Google account isn't on the household list in your Firebase rules.":'Sync error: '+err.message;refreshSync()});
+}
+function markJoined(){fb.joined=true;try{localStorage.setItem('magic-meals-joined-'+hhKey(),'1')}catch(e){}}
+function onRemote(snap){
+  if(snap.metadata.hasPendingWrites)return;
+  if(!snap.exists){markJoined();pushRemote(true);return}
+  const r=snap.data();
+  if(!fb.joined){
+    if(!named().length){markJoined();applyRemote(r,true);return}
+    if(!ui.sheets.some(s=>s.type==='join')){ui.sheets=[{type:'join',r}];renderSheet()}
+    return;
+  }
+  if((r.updatedAt||0)>(S.updatedAt||0))applyRemote(r);
+  else if((S.updatedAt||0)>(r.updatedAt||0))pushRemote(true);
+}
+function applyRemote(r,force){
+  const a=document.activeElement;
+  if(!force&&a&&a.closest&&a.closest('#sheetroot')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){fb.pending=r;return}
+  let n;try{n=migrate(JSON.parse(r.json))}catch(e){return}
+  S=n;S.updatedAt=Number(r.updatedAt)||S.updatedAt;
+  try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}
+  ensureKid();
+  ui.sheets=ui.sheets.filter(s=>!(s.type==='meal'&&!S.meals[s.id])&&!(s.type==='kid'&&!S.kids.some(k=>k.id===s.id)));
+  render();if(ui.sheets.length)renderSheet();
+}
+function pushRemote(now){
+  if(!fb.ref||!fb.user||!fb.joined||fb.state==='denied')return;
+  clearTimeout(fb.timer);
+  const go=()=>fb.ref.set({json:JSON.stringify(S),updatedAt:S.updatedAt,by:fb.user.email||''}).catch(e=>{fb.msg="Couldn't save to the household: "+(e.code||e.message);refreshSync()});
+  if(now)go();else fb.timer=setTimeout(go,600);
+}
+document.addEventListener('focusout',()=>{if(fb.pending)setTimeout(()=>{const a=document.activeElement;if(fb.pending&&!(a&&a.closest&&a.closest('#sheetroot')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))){const r=fb.pending;fb.pending=null;if((r.updatedAt||0)>(S.updatedAt||0))applyRemote(r)}},50)});
+function syncBox(){
+  if(inClaude())return`<p class="hint">Household sync runs in the GitHub version of the app. Here, your plans sync through your Claude account instead.</p>`;
+  const c=syncCfg();
+  if(!c)return`<p class="hint">Share one planner with someone else in real time. You need a free Firebase project first. Paste its web app config below.</p>
+  <label class="lbl" for="fbcfg">Firebase config</label><textarea id="fbcfg" rows="6" placeholder="const firebaseConfig = { apiKey: ..., authDomain: ..., projectId: ... };"></textarea>
+  <label class="lbl" for="fbhh">Household name</label><input id="fbhh" value="home" autocapitalize="off" autocomplete="off">
+  <p class="hint">Use the same config and household name on every phone that should share the plan.</p>
+  <button class="btn wide" data-act="fbconnect">Connect</button>`;
+  const st={off:'Not connected.',loading:'Connecting…',signedout:'Connected to Firebase. Sign in to start syncing.',denied:'Signed in, but this account has no access.',error:'Sync hit a problem.',on:'Syncing. Changes show up on every signed-in phone.'}[fb.state]||'';
+  let h=`<p class="hint"><b>${esc(st)}</b>${fb.user?`<br>Signed in as ${esc(fb.user.email||'')}`:''}<br>Household: ${esc(c.household||'home')}, project ${esc(c.config.projectId)}</p>${fb.msg?`<p class="hint" style="color:var(--tomato)">${esc(fb.msg)}</p>`:''}`;
+  if(!fb.user)h+=`<button class="btn wide" data-act="fbsignin">Sign in with Google</button>`;
+  else h+=`<button class="btn ghost wide" data-act="fbsignout">Sign out</button>`;
+  h+=`<button class="btn ghost danger wide" data-act="fbremove">Disconnect this phone</button>`;
+  return h;
+}
+function refreshSync(){const b=$('#syncbox');if(b)b.innerHTML=syncBox()}
+function sheetJoin(s){
+  return`<div class="sheethead"><h2>Join the household plan?</h2></div><p>The household already has a plan saved. This phone has its own plan too. Pick which one to keep. The other one gets replaced.</p>
+  <button class="btn wide" data-act="joinremote">Use the household plan</button>
+  <button class="btn ghost wide" data-act="joinlocal">Replace it with this phone's plan</button>
+  <p class="hint">If you're not sure, use the household plan and download a backup of this phone first from Setup.</p>`;
+}
 function renderSheet(){
   const root=$('#sheetroot'),s=topSheet();
   if(!s){root.innerHTML='';return}
@@ -805,6 +888,7 @@ function closeSheet(){
     if(to.length)toast('Copied to '+to.map(id=>S.kids.find(k=>k.id===id).name).join(' and '));
   }
   renderSheet();render();
+  if(!ui.sheets.length&&fb.pending){const r=fb.pending;fb.pending=null;if((r.updatedAt||0)>(S.updatedAt||0))applyRemote(r)}
 }
 
 function render(){
@@ -1040,6 +1124,12 @@ const acts={
     toast('Copied to '+names.join(' and ')+'. Tap a day to adjust.');
   },
 
+  fbconnect(){const cfg=parseConfig($('#fbcfg').value);if(!cfg){toast("That config doesn't look right. Paste the whole firebaseConfig block.");return}const hh=($('#fbhh').value||'home').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'')||'home';try{localStorage.setItem(LSSYNC,JSON.stringify({config:cfg,household:hh}))}catch(e){}startSync();refreshSync()},
+  fbsignin(){if(!window.firebase||!firebase.auth){toast('Still connecting. Try again in a moment.');return}const pr=new firebase.auth.GoogleAuthProvider();firebase.auth().signInWithPopup(pr).catch(e=>{if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')firebase.auth().signInWithRedirect(pr);else{fb.msg=authMsg(e);refreshSync()}})},
+  fbsignout(){if(window.firebase&&firebase.auth)firebase.auth().signOut()},
+  fbremove(){ask('Disconnect this phone?','This phone stops syncing and keeps a copy of the current plan. The household plan stays in Firebase.','Disconnect',()=>{stopDoc();try{if(window.firebase&&firebase.auth)firebase.auth().signOut()}catch(e){}try{localStorage.removeItem(LSSYNC)}catch(e){}fb.state='off';fb.user=null;fb.msg='';ui.sheets=[];render()})},
+  joinremote(){const s=topSheet();markJoined();ui.sheets=[];renderSheet();applyRemote(s.r,true);toast('Joined the household plan')},
+  joinlocal(){markJoined();ui.sheets=[];renderSheet();save();pushRemote(true);toast('Household plan replaced with this phone')},
   export(){exportData()},
   copybk(){copyText(JSON.stringify(S),'Backup copied. Paste it into a note to keep it.')},
   pasterestore(){const t=$('#pastebk').value.trim();if(t)restore(t);else toast('Paste your backup text first')}
@@ -1088,6 +1178,7 @@ document.addEventListener('pointerdown',e=>{
   const card=g.closest('.day'),cards=[...document.querySelectorAll('#app .day')],from=cards.indexOf(card);
   const rects=cards.map(c=>c.getBoundingClientRect());
   drag={card,cards,from,to:from,rects,id:e.pointerId,y0:e.clientY,s0:window.scrollY,lastY:e.clientY};
+  cards.forEach(c=>{c.classList.remove('pop');c.style.animation='none'});
   card.classList.add('dragging');cards.forEach(c=>{if(c!==card)c.classList.add('shift')});
   try{g.setPointerCapture(e.pointerId)}catch(_){}
   const tick=()=>{if(!drag)return;const y=drag.lastY;if(y<90)window.scrollBy(0,-10);else if(y>window.innerHeight-150)window.scrollBy(0,10);moveDrag();drag.raf=requestAnimationFrame(tick)};
@@ -1110,6 +1201,7 @@ function endDrag(e){
   cards.forEach(c=>{c.style.transform='';c.classList.remove('shift','dragging')});
   if(to!==from)reorderDays(from,to);
 }
+document.addEventListener('animationend',e=>{if(e.target.classList&&e.target.classList.contains('pop')){e.target.classList.remove('pop');e.target.style.animationDelay=''}});
 document.addEventListener('pointerup',endDrag);
 document.addEventListener('pointercancel',endDrag);
 const ENTER={newtag:'addtagmeal',setuptag:'addtag',presetname:'savepreset'};
@@ -1118,6 +1210,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&ENTER[e.target.id]){e.preventDefault();acts[ENTER[e.target.id]]()}
 });
 render();
+startSync();
 
 </script>
 </body>
