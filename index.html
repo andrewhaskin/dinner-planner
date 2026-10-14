@@ -780,9 +780,10 @@ const inClaude=()=>!!(window.claude&&window.claude.use);
 function syncCfg(){try{const c=JSON.parse(localStorage.getItem(LSSYNC)||'null');return c&&c.config&&c.config.apiKey?c:null}catch(e){return null}}
 const hhKey=()=>(syncCfg()?.household||'home');
 function parseConfig(text){
-  const m=String(text).match(/\{[\s\S]*\}/);if(!m)return null;
-  const t=m[0].replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,\s*}/g,'}');
-  try{const o=JSON.parse(t);return o.apiKey&&o.projectId&&o.authDomain?o:null}catch(e){return null}
+  const t=String(text).replace(/[\u201C\u201D\u2018\u2019\u2032\u2033]/g,'"'),o={};
+  const re=/["']?(apiKey|authDomain|projectId|storageBucket|messagingSenderId|appId|measurementId|databaseURL)["']?\s*:\s*["'`]([^"'`\s]+)["'`]/g;
+  let m;while((m=re.exec(t)))o[m[1]]=m[2];
+  return o.apiKey&&o.projectId?Object.assign({authDomain:o.projectId+'.firebaseapp.com'},o):null;
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('load'));document.head.appendChild(s)})}
 function authMsg(e){const c=e&&e.code||'';if(c==='auth/unauthorized-domain')return"This site isn't on Firebase's authorized domains list yet.";if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return'Sign-in was canceled.';if(c==='auth/network-request-failed')return'No connection. Try again.';return'Sign-in failed. '+(e&&e.message||'')}
