@@ -659,7 +659,7 @@ function viewSetup(){
   <div class="stack"><button class="btn" data-act="export">Download backup</button><button class="btn ghost" data-act="copybk">Copy backup text</button><label class="btn ghost file">Restore from file<input type="file" id="impfile" accept=".json,application/json"></label></div>
   <textarea id="pastebk" rows="3" placeholder="Or paste backup text here"></textarea>
   <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="pasterestore">Restore from text</button></div></section>
-  <p class="hint" style="text-align:center">Magic Meals version 2026.10.13c</p>`;
+  <p class="hint" style="text-align:center">Magic Meals version 2026.10.13d</p>`;
 }
 
 function itemChips(ids,act,part){return ids.map((id,j)=>S.meals[id]?`<span class="chip"><button data-act="openmeal" data-id="${id}">${esc(S.meals[id].name)}</button><button data-act="${act}" data-part="${part}" data-j="${j}" aria-label="Remove ${esc(S.meals[id].name)}">✕</button></span>`:'').join('')}
@@ -787,7 +787,7 @@ function parseConfig(text){
   return o.apiKey&&o.projectId?Object.assign({authDomain:o.projectId+'.firebaseapp.com'},o):null;
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('load'));document.head.appendChild(s)})}
-function authMsg(e){const c=e&&e.code||'';if(c==='auth/unauthorized-domain')return"This site isn't on Firebase's authorized domains list yet.";if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return'Sign-in was canceled.';if(c==='auth/network-request-failed')return'No connection. Try again.';return'Sign-in failed. '+(e&&e.message||'')}
+function authMsg(e){const c=e&&e.code||'';if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-login-credentials'].includes(c))return"That email and password don't match an account. Check both, or use Forgot password.";if(c==='auth/invalid-email')return"That email address doesn't look right.";if(c==='auth/too-many-requests')return'Too many tries. Wait a few minutes and try again.';if(c==='auth/operation-not-allowed')return'Email and password sign-in is turned off in Firebase. Turn it on under Authentication, Sign-in method.';if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return'Google sign-in was canceled. On iPhone, use email and password instead.';if(c==='auth/unauthorized-domain')return"This site isn't on Firebase's authorized domains list yet.";if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return'Sign-in was canceled.';if(c==='auth/network-request-failed')return'No connection. Try again.';return'Sign-in failed. '+(e&&e.message||'')}
 async function startSync(){
   const c=syncCfg();if(!c||inClaude())return;
   fb.state='loading';fb.msg='';refreshSync();
@@ -845,7 +845,11 @@ function syncBox(){
   <button class="btn wide" data-act="fbconnect">Connect</button><p id="fbmsg" class="hint" style="color:var(--tomato)"></p>`;
   const st={off:'Not connected.',loading:'Connecting…',signedout:'Connected to Firebase. Sign in to start syncing.',denied:'Signed in, but this account has no access.',error:'Sync hit a problem.',on:'Syncing. Changes show up on every signed-in phone.'}[fb.state]||'';
   let h=`<p class="hint"><b>${esc(st)}</b>${fb.user?`<br>Signed in as ${esc(fb.user.email||'')}`:''}<br>Household: ${esc(c.household||'home')}, project ${esc(c.config.projectId)}</p>${fb.msg?`<p class="hint" style="color:var(--tomato)">${esc(fb.msg)}</p>`:''}`;
-  if(!fb.user)h+=`<button class="btn wide" data-act="fbsignin">Sign in with Google</button>`;
+  if(!fb.user)h+=`<label class="lbl" for="fbemail">Email</label><input id="fbemail" type="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label class="lbl" for="fbpass">Password</label><input id="fbpass" type="password" autocomplete="current-password" enterkeyhint="go">
+  <button class="btn wide" style="margin-top:12px" data-act="fbemailin">Sign in</button>
+  <button class="linkbtn savelink" data-act="fbreset">Forgot password?</button>
+  <button class="btn ghost wide" style="margin-top:14px" data-act="fbsignin">Sign in with Google instead</button>`;
   else h+=`<button class="btn ghost wide" data-act="fbsignout">Sign out</button>`;
   h+=`<button class="btn ghost danger wide" data-act="fbremove">Disconnect this phone</button>`;
   return h;
@@ -1127,6 +1131,8 @@ const acts={
   },
 
   fbconnect(){const raw=$('#fbcfg').value,cfg=parseConfig(raw);if(!cfg){const t=String(raw).replace(/[\u201C\u201D\u2018\u2019]/g,'"'),found=['apiKey','authDomain','projectId','appId'].filter(k=>new RegExp(k+'["\']?\\s*:').test(t));$('#fbmsg').textContent=raw.trim()?`Couldn't read the config. Found ${found.length?found.join(', '):'none of the expected fields'} in ${raw.length} characters. It needs apiKey and projectId, each with a value in quotes.`:'The config box is empty. Paste the firebaseConfig block first.';return}const hh=($('#fbhh').value||'home').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'')||'home';try{localStorage.setItem(LSSYNC,JSON.stringify({config:cfg,household:hh}))}catch(e){}startSync();refreshSync()},
+  fbemailin(){if(!window.firebase||!firebase.auth){toast('Still connecting. Try again in a moment.');return}const em=$('#fbemail').value.trim(),pw=$('#fbpass').value;if(!em||!pw){fb.msg='Enter your email and password.';refreshSync();return}fb.msg='';firebase.auth().signInWithEmailAndPassword(em,pw).catch(e=>{fb.msg=authMsg(e);refreshSync();const f=$('#fbemail');if(f)f.value=em})},
+  fbreset(){if(!window.firebase||!firebase.auth)return;const em=($('#fbemail')?.value||'').trim();if(!em){fb.msg='Type your email above first, then tap Forgot password.';refreshSync();return}firebase.auth().sendPasswordResetEmail(em).then(()=>toast('Reset email sent. Check your inbox.')).catch(e=>{fb.msg=authMsg(e);refreshSync()})},
   fbsignin(){if(!window.firebase||!firebase.auth){toast('Still connecting. Try again in a moment.');return}const pr=new firebase.auth.GoogleAuthProvider();firebase.auth().signInWithPopup(pr).catch(e=>{if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')firebase.auth().signInWithRedirect(pr);else{fb.msg=authMsg(e);refreshSync()}})},
   fbsignout(){if(window.firebase&&firebase.auth)firebase.auth().signOut()},
   fbremove(){ask('Disconnect this phone?','This phone stops syncing and keeps a copy of the current plan. The household plan stays in Firebase.','Disconnect',()=>{stopDoc();try{if(window.firebase&&firebase.auth)firebase.auth().signOut()}catch(e){}try{localStorage.removeItem(LSSYNC)}catch(e){}fb.state='off';fb.user=null;fb.msg='';ui.sheets=[];render()})},
@@ -1206,7 +1212,7 @@ function endDrag(e){
 document.addEventListener('animationend',e=>{if(e.target.classList&&e.target.classList.contains('pop')){e.target.classList.remove('pop');e.target.style.animationDelay=''}});
 document.addEventListener('pointerup',endDrag);
 document.addEventListener('pointercancel',endDrag);
-const ENTER={newtag:'addtagmeal',setuptag:'addtag',presetname:'savepreset'};
+const ENTER={fbpass:'fbemailin',newtag:'addtagmeal',setuptag:'addtag',presetname:'savepreset'};
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&ui.sheets.length){closeSheet();return}
   if(e.key==='Enter'&&ENTER[e.target.id]){e.preventDefault();acts[ENTER[e.target.id]]()}
