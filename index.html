@@ -658,7 +658,8 @@ function viewSetup(){
   <section><h2>Backup</h2><p class="hint">${syncText()} The backup covers every meal.</p>
   <div class="stack"><button class="btn" data-act="export">Download backup</button><button class="btn ghost" data-act="copybk">Copy backup text</button><label class="btn ghost file">Restore from file<input type="file" id="impfile" accept=".json,application/json"></label></div>
   <textarea id="pastebk" rows="3" placeholder="Or paste backup text here"></textarea>
-  <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="pasterestore">Restore from text</button></div></section>`;
+  <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="pasterestore">Restore from text</button></div></section>
+  <p class="hint" style="text-align:center">Magic Meals version 2026.10.13c</p>`;
 }
 
 function itemChips(ids,act,part){return ids.map((id,j)=>S.meals[id]?`<span class="chip"><button data-act="openmeal" data-id="${id}">${esc(S.meals[id].name)}</button><button data-act="${act}" data-part="${part}" data-j="${j}" aria-label="Remove ${esc(S.meals[id].name)}">✕</button></span>`:'').join('')}
@@ -838,10 +839,10 @@ function syncBox(){
   if(inClaude())return`<p class="hint">Household sync runs in the GitHub version of the app. Here, your plans sync through your Claude account instead.</p>`;
   const c=syncCfg();
   if(!c)return`<p class="hint">Share one planner with someone else in real time. You need a free Firebase project first. Paste its web app config below.</p>
-  <label class="lbl" for="fbcfg">Firebase config</label><textarea id="fbcfg" rows="6" placeholder="const firebaseConfig = { apiKey: ..., authDomain: ..., projectId: ... };"></textarea>
+  <label class="lbl" for="fbcfg">Firebase config</label><textarea id="fbcfg" rows="6" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="const firebaseConfig = { apiKey: ..., authDomain: ..., projectId: ... };"></textarea>
   <label class="lbl" for="fbhh">Household name</label><input id="fbhh" value="home" autocapitalize="off" autocomplete="off">
   <p class="hint">Use the same config and household name on every phone that should share the plan.</p>
-  <button class="btn wide" data-act="fbconnect">Connect</button>`;
+  <button class="btn wide" data-act="fbconnect">Connect</button><p id="fbmsg" class="hint" style="color:var(--tomato)"></p>`;
   const st={off:'Not connected.',loading:'Connecting…',signedout:'Connected to Firebase. Sign in to start syncing.',denied:'Signed in, but this account has no access.',error:'Sync hit a problem.',on:'Syncing. Changes show up on every signed-in phone.'}[fb.state]||'';
   let h=`<p class="hint"><b>${esc(st)}</b>${fb.user?`<br>Signed in as ${esc(fb.user.email||'')}`:''}<br>Household: ${esc(c.household||'home')}, project ${esc(c.config.projectId)}</p>${fb.msg?`<p class="hint" style="color:var(--tomato)">${esc(fb.msg)}</p>`:''}`;
   if(!fb.user)h+=`<button class="btn wide" data-act="fbsignin">Sign in with Google</button>`;
@@ -1125,7 +1126,7 @@ const acts={
     toast('Copied to '+names.join(' and ')+'. Tap a day to adjust.');
   },
 
-  fbconnect(){const cfg=parseConfig($('#fbcfg').value);if(!cfg){toast("That config doesn't look right. Paste the whole firebaseConfig block.");return}const hh=($('#fbhh').value||'home').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'')||'home';try{localStorage.setItem(LSSYNC,JSON.stringify({config:cfg,household:hh}))}catch(e){}startSync();refreshSync()},
+  fbconnect(){const raw=$('#fbcfg').value,cfg=parseConfig(raw);if(!cfg){const t=String(raw).replace(/[\u201C\u201D\u2018\u2019]/g,'"'),found=['apiKey','authDomain','projectId','appId'].filter(k=>new RegExp(k+'["\']?\\s*:').test(t));$('#fbmsg').textContent=raw.trim()?`Couldn't read the config. Found ${found.length?found.join(', '):'none of the expected fields'} in ${raw.length} characters. It needs apiKey and projectId, each with a value in quotes.`:'The config box is empty. Paste the firebaseConfig block first.';return}const hh=($('#fbhh').value||'home').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'')||'home';try{localStorage.setItem(LSSYNC,JSON.stringify({config:cfg,household:hh}))}catch(e){}startSync();refreshSync()},
   fbsignin(){if(!window.firebase||!firebase.auth){toast('Still connecting. Try again in a moment.');return}const pr=new firebase.auth.GoogleAuthProvider();firebase.auth().signInWithPopup(pr).catch(e=>{if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')firebase.auth().signInWithRedirect(pr);else{fb.msg=authMsg(e);refreshSync()}})},
   fbsignout(){if(window.firebase&&firebase.auth)firebase.auth().signOut()},
   fbremove(){ask('Disconnect this phone?','This phone stops syncing and keeps a copy of the current plan. The household plan stays in Firebase.','Disconnect',()=>{stopDoc();try{if(window.firebase&&firebase.auth)firebase.auth().signOut()}catch(e){}try{localStorage.removeItem(LSSYNC)}catch(e){}fb.state='off';fb.user=null;fb.msg='';ui.sheets=[];render()})},
